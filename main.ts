@@ -142,7 +142,7 @@ export default class MyPlugin extends Plugin {
 			let perfume = this.perfumeMap.get(key);
 			let fileName = `${outputDirectory}/${perfume?.name}.md`;
 			// Format keywords with hashtags
-			const hashtagKeywords = perfume?.keywords.map(keyword => `#${keyword}`).join(' ');
+			const hashtagKeywords = perfume?.keywords.map(keyword => `#${keyword}`).join('\n');
 			const content = `# 향수명: ${perfume?.name}\n\n- 브랜드: [[${perfume?.brandName}]]\n- 키워드: ${hashtagKeywords}`;
 
 			if (!vault.getAbstractFileByPath(fileName))

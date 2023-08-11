@@ -6,12 +6,16 @@ const fs = require('fs');
 interface MyPluginSettings {
 	mySetting: string;
 	excelFilePath: string;
+	keywordSheetName: string;
+	accordSheetName: string;
 	outputDirectory: string;
 }
 
 const DEFAULT_SETTINGS: MyPluginSettings = {
 	mySetting: 'default',
 	excelFilePath: '',
+	keywordSheetName: '',
+	accordSheetName: '',
 	outputDirectory: '',
 }
 
@@ -61,7 +65,7 @@ export default class MyPlugin extends Plugin {
 
 		// This adds a status bar item to the bottom of the app. Does not work on mobile apps.
 		const statusBarItemEl = this.addStatusBarItem();
-		statusBarItemEl.setText('Etov online!');
+		statusBarItemEl.setText(`Etov online! ⚙debug⚙: |${this.settings.keywordSheetName}|${this.settings.accordSheetName}||`);
 
 		// This adds a simple command that can be triggered anywhere
 		this.addCommand({
@@ -215,6 +219,28 @@ class SampleSettingTab extends PluginSettingTab {
         .setValue(this.plugin.settings.excelFilePath || '')
         .onChange(async (value) => {
           this.plugin.settings.excelFilePath = value;
+          await this.plugin.saveSettings();
+        }));
+
+		new Setting(containerEl)
+      .setName('Keyword Sheet Name')
+      .setDesc('Specify the name of the Keyword Sheet')
+      .addText(text => text
+        .setPlaceholder('Enter the name of the Keyword Sheet')
+        .setValue(this.plugin.settings.keywordSheetName || '')
+        .onChange(async (value) => {
+          this.plugin.settings.keywordSheetName = value;
+          await this.plugin.saveSettings();
+        }));
+
+		new Setting(containerEl)
+      .setName('Accord Sheet Name')
+      .setDesc('Specify the name of the Accord Sheet')
+      .addText(text => text
+        .setPlaceholder('Enter the name of the Accord Sheet')
+        .setValue(this.plugin.settings.accordSheetName || '')
+        .onChange(async (value) => {
+          this.plugin.settings.accordSheetName = value;
           await this.plugin.saveSettings();
         }));
 

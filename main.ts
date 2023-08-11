@@ -22,38 +22,60 @@ const DEFAULT_SETTINGS: MyPluginSettings = {
 export default class MyPlugin extends Plugin {
 	settings: MyPluginSettings;
 	perfumeMap: Map<string, Perfume>;
+	accordSet: Set<string>;
 
 	onSubmit = async (): Promise<void> => {
+		const statusBarItemEl = this.addStatusBarItem();
+		statusBarItemEl.setText(`[Etov Working🚀]`);
+		// Todo.필요한 시트를 열되, 안열렸을때 파일이없을때 예외처리가 필요하다.
 		// open excelfile
 		const filepath = this.settings.excelFilePath;
 		const excelFile = fs.readFileSync(filepath);
 		const workbook = XLSX.read(excelFile, { type: 'buffer' });
 
 		// Get the first sheet as JSON
-		//const sheetName = workbook.SheetNames[0];
-		const sheetName = '2차 정리';
-		const worksheet = workbook.Sheets[sheetName];
-		const jsonData = XLSX.utils.sheet_to_json(worksheet, {header:1});
+		const keyWordSheet = workbook.Sheets[this.settings.keywordSheetName];
+		const keyWordJsonData = XLSX.utils.sheet_to_json(keyWordSheet, {header:1});
 
+		const accordSheet = workbook.Sheets[this.settings.accordSheetName];
+		const accordJsonData: (string)[][] = XLSX.utils.sheet_to_json(accordSheet, {header:1});
+		// 비어있는 셀도 같이 잡혀서 필터링함.
+		const filteredAccordData = accordJsonData.filter(row => row.some(cell => cell !== null && cell !== undefined && cell !== ''));
 
-		//let perfumeMap = new Map<string, Perfume>();
-		for (let index = 1; index < jsonData.length; index++) {
-		// for (let index = 1; index < 100; index++) {
-			const key = jsonData[index][0];
-
+		// 파일 read 시작
+		for (let index = 1; index < keyWordJsonData.length; index++) {
+			const key = keyWordJsonData[index][0];
 			if (this.perfumeMap.has(key)) {
-				this.perfumeMap.get(key)?.keywords.push(jsonData[index][3]);
+				this.perfumeMap.get(key)?.keywords.push(keyWordJsonData[index][3]);
 			} else {
-				this.perfumeMap.set(key, new Perfume(jsonData[index][0], jsonData[index][1], jsonData[index][2], [jsonData[index][3]]));
+				this.perfumeMap.set(key, new Perfume(keyWordJsonData[index][0], keyWordJsonData[index][1], keyWordJsonData[index][2], [keyWordJsonData[index][3]]));
 			}
 		}
+
+		for (let index = 1; index < filteredAccordData.length; index++) {
+			const key = filteredAccordData[index][0];
+			if (this.perfumeMap.has(key)) {
+				if (filteredAccordData[index][3] == undefined) continue;
+				const accordsArray = (filteredAccordData[index][3] as string).split(',');
+				const trimmedAccords = accordsArray.map(accord => accord.trim());
+
+				const perfume = this.perfumeMap.get(key);
+				if (perfume && perfume.accords) perfume.accords.push(...trimmedAccords);
+				// trimmedAccords의 각 원소를
+			} else {
+				console.log(`❌ key: ${key} | name: ${filteredAccordData[index][2]}에 해당하는 향수가 없습니다...!`)
+			}
+		}
+		// 파일 read 끝
 		console.log('perfumeMap:', this.perfumeMap);
 		await this.createPerfumeFiles();
+		statusBarItemEl.setText(`[Etov Done ✅]`);
 	}
 
 	async onload() {
 		await this.loadSettings();
 		this.perfumeMap = new Map<string, Perfume>();
+		this.accordSet = new Set<string>();
 
 		const ribbonIconEl = this.addRibbonIcon('dice', 'Sample Plugin', (evt: MouseEvent) => {
 			new Notice('This is a notice!');
@@ -65,7 +87,7 @@ export default class MyPlugin extends Plugin {
 
 		// This adds a status bar item to the bottom of the app. Does not work on mobile apps.
 		const statusBarItemEl = this.addStatusBarItem();
-		statusBarItemEl.setText(`Etov online! ⚙debug⚙: |${this.settings.keywordSheetName}|${this.settings.accordSheetName}||`);
+		statusBarItemEl.setText(`[Etov Online🌈]`);
 
 		// This adds a simple command that can be triggered anywhere
 		this.addCommand({
@@ -130,6 +152,7 @@ export default class MyPlugin extends Plugin {
 	}
 
 	async createPerfumeFiles() {
+		// 파일 생성 시작
 		const outputDirectory = this.settings.outputDirectory
 		let vault = this.app.vault;
 		let keys = Array.from(this.perfumeMap.keys());
@@ -140,21 +163,36 @@ export default class MyPlugin extends Plugin {
 		console.log('folder:', folder);
 		if (!folder) {
 			await vault.createFolder(outputDirectory);
+			await vault.createFolder(outputDirectory + '/perfume');
+			await vault.createFolder(outputDirectory + '/accord');
 		}
 
 		for(let key of keys) {
 			let perfume = this.perfumeMap.get(key);
-			let fileName = `${outputDirectory}/${perfume?.name}.md`;
+			let fileName = `${outputDirectory}/perfume/${perfume?.name}.md`;
 			// Format keywords with hashtags
 			const hashtagKeywords = perfume?.keywords.map(keyword => `#${keyword}`).join('\n');
-			const content = `# 향수명: ${perfume?.name}\n\n- 브랜드: [[${perfume?.brandName}]]\n- 키워드: ${hashtagKeywords}`;
+			let content = `# 향수명: ${perfume?.name}\n\n- 브랜드: [[${perfume?.brandName}]]\n- 키워드: ${hashtagKeywords}\n- 어코드:`;
+
+			// perfume.accords의 각 원소들에 대해 	accordSet: Set<string>에 추가한다.
+			if (perfume?.accords) {
+				for (let accord of perfume.accords) {
+					this.accordSet.add(accord);
+					content += `\n[[${accord}]]`;
+				}
+			}
 
 			if (!vault.getAbstractFileByPath(fileName))
-				//await vault.create(fileName, '', true);
 				await vault.create(fileName, content);
 			else
 				await vault.adapter.write(fileName, content);
 		}
+
+		for(const accord of this.accordSet) {
+			await vault.create(`${outputDirectory}/accord/${accord}.md`, '');
+		}
+
+		// 파일 생성 끝
 	}
 }
 
